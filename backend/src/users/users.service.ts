@@ -662,6 +662,11 @@ export class UsersService {
       database: dbName,
       usersFound: 0,
       userIds: [],
+      usersBackedUp: 0,
+      usersDeleted: 0,
+      businessesBackedUp: 0,
+      businessesDeleted: 0,
+      otpsBackedUp: 0,
       collections: {},
       errors: [],
     };
@@ -704,6 +709,37 @@ export class UsersService {
 
       // Ensure backup database exists
       const backupConnection = await this.ensureBackupDatabase(backupDbName);
+
+      // Get business model for business operations
+      const sourceBusinessModel = sourceConnection.model(Business.name, BusinessSchema);
+
+      // Get business IDs for backup
+      const businessIds = matchedUsers
+        .map((u: any) => (u.businessId ? u.businessId.toString() : null))
+        .filter((id): id is string => !!id);
+
+      // Get businesses to backup
+      let businessesToBackup: any[] = [];
+      if (businessIds.length > 0) {
+        const objectIds = businessIds.map(id => new Types.ObjectId(id));
+        businessesToBackup = await sourceBusinessModel.find({ _id: { $in: objectIds } }).lean();
+      }
+
+      // Backup users
+      const usersBackedUp = await this.backupUsers(matchedUsers, backupConnection);
+      result.usersBackedUp = usersBackedUp || 0;
+      this.logger.log(`Backed up ${usersBackedUp} users to ${backupDbName}`);
+
+      // Backup businesses
+      const businessesBackedUp = await this.backupBusinesses(businessesToBackup, backupConnection);
+      result.businessesBackedUp = businessesBackedUp || 0;
+      this.logger.log(`Backed up ${businessesBackedUp} businesses to ${backupDbName}`);
+
+      // Backup OTPs
+      const userIds = matchedUsers.map((u: any) => u._id.toString());
+      const otpsBackedUp = await this.backupOtpsForUsers(userIds, sourceConnection, backupConnection);
+      result.otpsBackedUp = otpsBackedUp || 0;
+      this.logger.log(`Backed up ${otpsBackedUp} OTPs to ${backupDbName}`);
 
       // Collections with createdBy field
       const collectionsWithCreatedBy = [
@@ -771,7 +807,55 @@ export class UsersService {
         }
       }
 
-      this.logger.log(`Completed deletion in ${dbName}: ${result.userIds.length} users processed`);
+      // Now delete users and businesses from users collection
+      const session = await sourceConnection.startSession();
+      result.usersDeleted = 0;
+      result.businessesDeleted = 0;
+      try {
+        await session.withTransaction(async () => {
+          for (const user of matchedUsers) {
+            try {
+              const businessId = user.businessId ? user.businessId.toString() : null;
+
+              // Delete user
+              const userDeleteResult = await sourceUserModel.deleteOne({ _id: user._id }).session(session);
+              result.usersDeleted += userDeleteResult.deletedCount || 0;
+
+              // Check and delete business if no other users reference it
+              if (businessId) {
+                const otherUsersCount = await sourceUserModel.countDocuments({
+                  businessId: user.businessId,
+                  _id: { $ne: user._id },
+                }).session(session);
+
+                if (otherUsersCount === 0) {
+                  const businessDeleteResult = await sourceBusinessModel.deleteOne({
+                    _id: user.businessId,
+                  }).session(session);
+                  result.businessesDeleted += businessDeleteResult.deletedCount || 0;
+                  this.logger.log(`Business ${businessId} deleted from ${dbName}`);
+                } else {
+                  this.logger.log(
+                    `Business ${businessId} not deleted - still referenced by ${otherUsersCount} other user(s) in ${dbName}`,
+                  );
+                }
+              }
+            } catch (err: any) {
+              this.logger.error(`Error deleting user ${user._id} in ${dbName}: ${err.message}`);
+              result.errors.push(`User ${user._id}: ${err.message}`);
+            }
+          }
+        });
+      } catch (err: any) {
+        this.logger.error(`Transaction error in ${dbName}: ${err.message}`);
+        result.errors.push(`Transaction error: ${err.message}`);
+      } finally {
+        session.endSession();
+      }
+
+      this.logger.log(
+        `Completed deletion in ${dbName}: ${result.userIds.length} users processed, ${result.usersDeleted} users deleted, ${result.businessesDeleted} businesses deleted`,
+      );
     } catch (err: any) {
       this.logger.error(`Error processing ${dbName}: ${err.message}`);
       result.errors.push(`Database error: ${err.message}`);
