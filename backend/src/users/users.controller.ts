@@ -81,6 +81,81 @@ export class UsersController {
     return { results };
   }
 
+  @Post('delete-by-email')
+  async deleteByEmail(@Body() body: { email: string }) {
+    if (!body || !body.email) throw new HttpException('email required', HttpStatus.BAD_REQUEST);
+    const results = await this.usersService.deleteByEmailWithBackup(body.email);
+    return { results };
+  }
+
+  @Post('delete-by-phone/sandbox')
+  async deleteByPhoneSandbox(@Body() body: { phoneNo: string }) {
+    if (!body || !body.phoneNo) throw new HttpException('phoneNo required', HttpStatus.BAD_REQUEST);
+    const dbName = process.env.SANDBOX_DB || 'sandboxDb';
+    const backupDbName = process.env.BACKUP_SANDBOX_DB || 'backUpSandboxDb';
+    const result = await this.usersService.deleteByPhoneFromDb(body.phoneNo, dbName, backupDbName);
+    return { result };
+  }
+
+  @Post('delete-by-phone/pepagora')
+  async deleteByPhonePepagora(@Body() body: { phoneNo: string }) {
+    if (!body || !body.phoneNo) throw new HttpException('phoneNo required', HttpStatus.BAD_REQUEST);
+    const dbName = process.env.PEPAGORA_DB || 'pepagoraDb';
+    const backupDbName = process.env.BACKUP_PEPAGORA_DB || 'backupPepagoraDb';
+    const result = await this.usersService.deleteByPhoneFromDb(body.phoneNo, dbName, backupDbName);
+    return { result };
+  }
+
+  @Post('delete-by-email/sandbox')
+  async deleteByEmailSandbox(@Body() body: { email: string }) {
+    if (!body || !body.email) throw new HttpException('email required', HttpStatus.BAD_REQUEST);
+    const dbName = process.env.SANDBOX_DB || 'sandboxDb';
+    const backupDbName = process.env.BACKUP_SANDBOX_DB || 'backUpSandboxDb';
+    const result = await this.usersService.deleteByEmailFromDb(body.email, dbName, backupDbName);
+    return { result };
+  }
+
+  @Post('delete-by-email/pepagora')
+  async deleteByEmailPepagora(@Body() body: { email: string }) {
+    if (!body || !body.email) throw new HttpException('email required', HttpStatus.BAD_REQUEST);
+    const dbName = process.env.PEPAGORA_DB || 'pepagoraDb';
+    const backupDbName = process.env.BACKUP_PEPAGORA_DB || 'backupPepagoraDb';
+    const result = await this.usersService.deleteByEmailFromDb(body.email, dbName, backupDbName);
+    return { result };
+  }
+
+  @Post('delete-user-related-data/sandbox')
+  async deleteUserRelatedDataSandbox(@Body() body: { phoneNo?: string; email?: string }) {
+    if (!body || (!body.phoneNo && !body.email)) {
+      throw new HttpException('Either phoneNo or email is required', HttpStatus.BAD_REQUEST);
+    }
+    const dbName = process.env.SANDBOX_DB || 'sandboxDb';
+    const backupDbName = process.env.BACKUP_SANDBOX_DB || 'backUpSandboxDb';
+    const result = await this.usersService.deleteUserRelatedDataFromDb(
+      dbName,
+      backupDbName,
+      body.phoneNo,
+      body.email,
+    );
+    return { result };
+  }
+
+  @Post('delete-user-related-data/pepagora')
+  async deleteUserRelatedDataPepagora(@Body() body: { phoneNo?: string; email?: string }) {
+    if (!body || (!body.phoneNo && !body.email)) {
+      throw new HttpException('Either phoneNo or email is required', HttpStatus.BAD_REQUEST);
+    }
+    const dbName = process.env.PEPAGORA_DB || 'pepagoraDb';
+    const backupDbName = process.env.BACKUP_PEPAGORA_DB || 'backupPepagoraDb';
+    const result = await this.usersService.deleteUserRelatedDataFromDb(
+      dbName,
+      backupDbName,
+      body.phoneNo,
+      body.email,
+    );
+    return { result };
+  }
+
   @Post('delete-all-from-file')
   async deleteAllFromFile(@Body() body: { phoneNumbers: string[] }) {
     if (!body || !Array.isArray(body.phoneNumbers) || body.phoneNumbers.length === 0) {
