@@ -14,6 +14,40 @@ export class UsersService {
     @InjectConnection() private connection: Connection,
   ) {}
 
+  // Helper method to ensure MongoDB connection is ready
+  private async ensureConnectionReady(): Promise<void> {
+    // Check if connection is ready by checking readyState (1 = connected)
+    const readyState = this.connection.readyState as number;
+    if (readyState === 1) {
+      // Connection is already connected
+      return;
+    }
+
+    // If not connected, try to ping the database to ensure connection
+    try {
+      if (this.connection.db) {
+        await this.connection.db.admin().ping();
+        this.logger.log('MongoDB connection verified via ping');
+        return;
+      }
+    } catch (error) {
+      this.logger.warn('MongoDB ping failed, waiting for connection...');
+    }
+
+    // If ping fails or db is not available, wait for connection with timeout
+    const maxWaitTime = 30000; // 30 seconds
+    const startTime = Date.now();
+    
+    while ((this.connection.readyState as number) !== 1) {
+      if (Date.now() - startTime > maxWaitTime) {
+        const stateNames = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+        const currentState = this.connection.readyState as number;
+        throw new Error(`MongoDB connection timeout: Connection state is ${stateNames[currentState] || 'unknown'}, not ready after 30 seconds`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before checking again
+    }
+  }
+
   normalizePhone(phone?: string) {
     if (!phone) return phone;
     return phone.replace(/[^\d+]/g, '');
@@ -133,6 +167,9 @@ export class UsersService {
 
   // Backup methods
   async ensureBackupDatabase(backupDbName: string): Promise<Connection> {
+    // Ensure main connection is ready before switching databases
+    await this.ensureConnectionReady();
+    
     // Create connection to backup database (uses same MongoDB connection, different database)
     const backupConnection = this.connection.useDb(backupDbName, { useCache: true });
     
@@ -268,8 +305,11 @@ export class UsersService {
       };
     });
 
-    for (const dbConfig of databases) {
+      for (const dbConfig of databases) {
       try {
+        // Ensure main connection is ready before switching databases
+        await this.ensureConnectionReady();
+        
         // Connect to source database
         const sourceConnection = this.connection.useDb(dbConfig.name, { useCache: true });
         const sourceUserModel = sourceConnection.model(User.name, UserSchema);
@@ -394,6 +434,9 @@ export class UsersService {
         return result;
       }
 
+      // Ensure main connection is ready before switching databases
+      await this.ensureConnectionReady();
+      
       // Connect to source database
       const sourceConnection = this.connection.useDb(dbName, { useCache: true });
       const sourceUserModel = sourceConnection.model(User.name, UserSchema);
@@ -488,6 +531,9 @@ export class UsersService {
   // Delete by phone from a specific database
   async deleteByPhoneFromDb(phoneNo: string, dbName: string, backupDbName: string): Promise<any> {
     try {
+      // Ensure main connection is ready before switching databases
+      await this.ensureConnectionReady();
+      
       // Connect to source database
       const sourceConnection = this.connection.useDb(dbName, { useCache: true });
       const sourceUserModel = sourceConnection.model(User.name, UserSchema);
@@ -530,6 +576,9 @@ export class UsersService {
   // Delete by email from a specific database
   async deleteByEmailFromDb(email: string, dbName: string, backupDbName: string): Promise<any> {
     try {
+      // Ensure main connection is ready before switching databases
+      await this.ensureConnectionReady();
+      
       // Connect to source database
       const sourceConnection = this.connection.useDb(dbName, { useCache: true });
       const sourceUserModel = sourceConnection.model(User.name, UserSchema);
@@ -672,6 +721,9 @@ export class UsersService {
     };
 
     try {
+      // Ensure main connection is ready before switching databases
+      await this.ensureConnectionReady();
+      
       // Connect to source database
       const sourceConnection = this.connection.useDb(dbName, { useCache: true });
       const sourceUserModel = sourceConnection.model(User.name, UserSchema);
