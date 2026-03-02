@@ -16,7 +16,9 @@ dotenv.config();
       maxPoolSize: 10, // Maximum number of connections in the pool
       minPoolSize: 2, // Minimum number of connections in the pool
       retryWrites: true, // Retry write operations on network errors
-      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      maxIdleTimeMS: 60000, // Close connections after 60 seconds of inactivity (increased from 30s)
+      heartbeatFrequencyMS: 10000, // Send heartbeat every 10 seconds to keep connections alive
+      serverMonitoringMode: 'auto', // Automatically monitor server status
     }),
     UsersModule,
     OtpsModule,
