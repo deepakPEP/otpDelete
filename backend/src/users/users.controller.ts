@@ -29,4 +29,13 @@ export class UsersController {
     return { result };
   }
 
+  @Post('delete-all-documents-except-users-businesses/sandbox')
+  async deleteAllDocumentsExceptUsersAndBusinesses(@Body() body: { phoneNo?: string; email?: string }) {
+    if (!body || (!body.phoneNo && !body.email)) {
+      throw new HttpException('Either phoneNo or email is required', HttpStatus.BAD_REQUEST);
+    }
+    const result = await this.usersService.deleteAllDocumentsExceptUsersAndBusinesses(body.phoneNo, body.email);
+    return { result };
+  }
+
 }
