@@ -4,7 +4,6 @@ import { UsersModule } from './users/users.module';
 import { OtpsModule } from './otps/otps.module';
 import * as dotenv from 'dotenv';
 dotenv.config();
-// msanthoshhh
 
 @Module({
   imports: [
